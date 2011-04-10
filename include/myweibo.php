@@ -1,5 +1,5 @@
 <?php
-require_once 'txwboauth.php';
+require_once __DIR__.'/../library/txwboauth.php';
 
 class MyWeibo
 {
