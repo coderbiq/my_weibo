@@ -8,10 +8,30 @@ class MyWeibo
     const COLLBACK = 'http://127.0.0.1/myweibo/collback.php';
 
     protected $_tx_weibo_sdk;
+    protected $_collection;
 
     public function __construct()
     {
         $this->_tx_weibo_sdk = new WeiboOauth(self::WB_AKEY, self::WB_SKEY);
+
+        $mongo = new Mongo();
+        $db = $mongo->selectDB('myweibo');
+        $this->_collection = $db->selectCollection('user');
+
+        $this->_user = $this->_collection->findOne(array('account.tencent.name' => 'biqiang'));
+        if($this->_user === null)
+        {
+            $this->_user = array(
+                'account' => array(
+                    'tencent' => array(
+                        'name' => 'biqiang'
+                    )
+                )
+            );
+
+            $this->_collection->save($this->_user);
+            $this->_user = $this->_collection->findOne(array('account.tencent.name' => 'biqiang'));
+        }
     }
 
     public function validateAuth()
@@ -53,28 +73,15 @@ class MyWeibo
             $session['last_key']['oauth_token_secret']
         );
 
-        if(file_exists('news')&&(time()-filectime('data') < 60))
-        {
-            $data = file_get_contents('news');
-            $data = json_decode($data);
-        }
-        else
-        {
-            $params = array(
-                'format' => 'json',
-                'pageflag' => 0,
-                'reqnum' => 20,
-                'pagetime' => 0,
-                'name' => 'biqiang'
-            );
+        $params = array(
+            'format' => 'json',
+            'pageflag' => 0,
+            'reqnum' => 20,
+            'pagetime' => 0,
+            'name' => 'biqiang'
+        );
 
-            $data = $this->_tx_weibo_sdk->get('http://open.t.qq.com/api/statuses/broadcast_timeline', $params);
-
-            if(file_exists('news')&&(!is_readable('news') || !is_writable('news')))
-                chmod('data' , 0777);
-
-            file_put_contents('news' , json_encode($data));
-        }
+        $data = $this->_tx_weibo_sdk->get('http://open.t.qq.com/api/statuses/broadcast_timeline', $params);
 
         return $data;
     }
@@ -94,34 +101,21 @@ class MyWeibo
         );
 
         $last_key = $this->_tx_weibo_sdk->getAccessToken($_oauth_verifier);
-        print_r($last_key);
+#        print_r($last_key);exit();
         $session['last_key'] = $last_key;
         $this->setSession($session);
     }
 
     public function getSession()
     {
-        if(!file_exists('data'))
-            $session = array();
-        else
-        {
-            $session = file_get_contents('data');
-            if($session == null)
-                $session = array();
-            else
-                $session = json_decode($session, true);
-        }
-
+        $session = $this->_user['account']['tencent'];
         return $session;
     }
 
     public function setSession($_session)
     {
-        $session = json_encode($_session);
+        $this->_user['account']['tencent'] = array_merge($this->_user['account']['tencent'], $_session);
 
-        if(file_exists('data')&&(!is_readable('data') || !is_writable('data')))
-            chmod('data' , 0777);
-
-        file_put_contents('data', $session);
+        $this->_collection->save($this->_user);
     }
 }
